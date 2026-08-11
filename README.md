@@ -1,2 +1,2 @@
-# TengSheng_Learning
+# ShengTeng_Learning
 每日打卡 = "项目案例 + 理论笔记"双交付，模拟昇腾FAE / 模型部署调优工程师的真实工作流（环境部署 → 数据处理 → 容器化 → 推理服务交付）。
