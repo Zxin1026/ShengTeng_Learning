@@ -279,3 +279,222 @@ echo "Log: ~/train_demo/logs/train.log"
 ### 10. 今日流程速记
 
 **确认 IP -> server 开 SSH -> server 建 trainer -> client 生成密钥 -> 复制公钥 -> 免密登录 -> 写 train.py -> 写 run_train.sh -> nohup 后台运行 -> tail -f 查看日志。**
+
+## 2026-08-14｜Shell 基础与批量日志分析
+
+### 1. 创建和运行 Shell 脚本
+
+| 目的 | 命令 / 写法 | 说明 |
+|---|---|---|
+| 指定 Bash | `#!/usr/bin/env bash` | 写在脚本第一行，告诉系统使用 Bash 执行 |
+| 查看 Bash 路径 | `which bash` | 本机结果为 `/usr/bin/bash` 时，也可以写 `#!/usr/bin/bash` |
+| 添加执行权限 | `chmod +x 脚本名.sh` | 让脚本可以直接运行 |
+| 直接运行脚本 | `./脚本名.sh` | 需要脚本具有执行权限 |
+| 使用 Bash 运行 | `bash 脚本名.sh` | 没有执行权限时也可以使用 |
+| 检查语法 | `bash -n 脚本名.sh` | 没有输出一般表示语法正确 |
+| 调试脚本 | `bash -x 脚本名.sh 参数` | 显示每一步执行过程，方便找错 |
+
+### 2. 变量与环境变量
+
+| 类型 | 示例 | 说明 |
+|---|---|---|
+| 普通变量 | `name="zhangxin"` | 保存脚本中要使用的数据 |
+| 使用变量 | `echo "$name"` | 使用变量时最好加双引号 |
+| 环境变量 | `export APP_ENV="test"` | 当前 Shell 启动的子进程也能使用 |
+| 只读变量 | `readonly VERSION="1.0"` | 设置后不能再次修改 |
+| 删除变量 | `unset name` | 删除普通变量；不能删除只读变量 |
+| 命令结果赋值 | `now=$(date)` | 把命令输出保存到变量中 |
+
+变量赋值时，等号两边不能有空格：
+
+```bash
+name="zhangxin"      # 正确
+name = "zhangxin"    # 错误
+```
+
+### 3. Shell 特殊变量
+
+| 变量 | 含义 | 示例 |
+|---|---|---|
+| `$0` | 当前脚本名称 | `echo "$0"` |
+| `$1`、`$2` | 第一个、第二个参数 | `./log_analyze.sh logs/app.log ERROR` |
+| `$#` | 参数个数 | 判断用户是否传入文件名 |
+| `$?` | 上一条命令的退出状态 | `0` 通常表示成功，非 `0` 表示失败 |
+| `$$` | 当前 Shell 的 PID | 可用于区分不同脚本进程 |
+| `$!` | 上一个后台任务的 PID | 常用于保存后台任务 PID |
+
+参数示例：
+
+```bash
+./log_analyze.sh logs/app.log ERROR
+```
+
+此时 `$0` 是 `./log_analyze.sh`，`$1` 是 `logs/app.log`，`$2` 是 `ERROR`，`$#` 是 `2`。
+
+### 4. 条件判断
+
+| 判断目的 | 写法 | 说明 |
+|---|---|---|
+| 判断文件存在 | `[ -f "$file" ]` | 普通文件存在时条件成立 |
+| 判断目录存在 | `[ -d "$dir" ]` | 目录存在时条件成立 |
+| 判断字符串为空 | `[ -z "$name" ]` | 变量没有内容时条件成立 |
+| 判断字符串非空 | `[ -n "$name" ]` | 变量有内容时条件成立 |
+| 判断数字相等 | `[ "$a" -eq "$b" ]` | 数字比较使用 `-eq` |
+| 判断字符串相等 | `[ "$a" = "$b" ]` | 字符串比较使用 `=` |
+
+基本结构：
+
+```bash
+if [ 条件 ]; then
+    要执行的命令
+elif [ 其他条件 ]; then
+    要执行的命令
+else
+    要执行的命令
+fi
+```
+
+### 5. 循环
+
+| 类型 | 示例 | 适用场景 |
+|---|---|---|
+| `for` | `for file in logs/*.log; do echo "$file"; done` | 批量处理一组文件 |
+| `while` | `while [ "$n" -le 5 ]; do echo "$n"; n=$((n+1)); done` | 条件成立时持续执行 |
+| `until` | `until [ -f result.txt ]; do sleep 1; done` | 条件不成立时持续执行 |
+| `break` | `break` | 立即结束整个循环 |
+| `continue` | `continue` | 跳过本次，进入下一次循环 |
+
+### 6. 函数
+
+| 目的 | 写法 | 说明 |
+|---|---|---|
+| 定义函数 | `say_hello() { echo "hello"; }` | 把重复操作放在一起 |
+| 调用函数 | `say_hello` | 直接写函数名即可调用 |
+| 传入参数 | `say_hello "zhangxin"` | 函数内部用 `$1` 接收 |
+| 局部变量 | `local name="$1"` | 只在当前函数中使用 |
+| 返回状态 | `return 0` | `0` 表示成功，非 `0` 表示失败 |
+| 返回文字 | `echo "$result"` | 文字或数据通常用 `echo` 输出 |
+
+函数示例：
+
+```bash
+check_file() {
+    local file="$1"
+
+    if [ -f "$file" ]; then
+        echo "文件存在: $file"
+        return 0
+    fi
+
+    echo "文件不存在: $file"
+    return 1
+}
+```
+
+### 7. 批量日志分析脚本
+
+创建目录和日志文件：
+
+```bash
+mkdir -p logs
+vim logs/app.log
+```
+
+`log_analyze.sh` 示例：
+
+```bash
+#!/usr/bin/env bash
+
+if [ $# -lt 1 ]; then
+    echo "用法: $0 日志文件 [关键字]"
+    exit 1
+fi
+
+log_file="$1"
+keyword="${2:-ERROR}"
+
+if [ ! -f "$log_file" ]; then
+    echo "错误: 日志文件不存在: $log_file"
+    exit 2
+fi
+
+echo "===== 日志分析开始 ====="
+echo "日志文件: $log_file"
+echo "关键字: $keyword"
+echo
+
+echo "1. $keyword 日志总数:"
+grep -c -- "$keyword" "$log_file"
+echo
+
+echo "2. $keyword 日志明细:"
+grep -- "$keyword" "$log_file"
+echo
+
+echo "3. 涉及用户统计:"
+grep -- "$keyword" "$log_file" | awk '{
+    for (i = 1; i <= NF; i++) {
+        if ($i ~ /^user=/) print $i
+    }
+}' | sort | uniq -c
+
+echo
+echo "4. 涉及 IP 统计:"
+grep -- "$keyword" "$log_file" | awk '{
+    for (i = 1; i <= NF; i++) {
+        if ($i ~ /^ip=/) print $i
+    }
+}' | sort | uniq -c
+
+echo
+echo "===== 日志分析结束 ====="
+```
+
+运行脚本：
+
+```bash
+chmod +x log_analyze.sh
+./log_analyze.sh logs/app.log ERROR
+```
+
+第二个参数不写时，脚本会默认统计 `ERROR`：
+
+```bash
+./log_analyze.sh logs/app.log
+```
+
+### 8. 日志分析常用命令
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看日志 | `cat logs/app.log` | 一次显示全部内容 |
+| 查看错误行 | `grep "ERROR" logs/app.log` | 找出包含 `ERROR` 的行 |
+| 统计错误数 | `grep -c "ERROR" logs/app.log` | 输出匹配行数 |
+| 统计用户 | `grep "ERROR" logs/app.log \| awk ...` | 提取 `user=` 字段后统计 |
+| 查看文件是否存在 | `ls -l logs/app.log` | 同时检查路径和文件名 |
+
+### 9. 脚本排错
+
+| 现象 | 检查方法 | 常见原因 |
+|---|---|---|
+| 提示文件不存在，文件名为空 | `bash -x ./log_analyze.sh logs/app.log ERROR` | `log_file="$1"` 写错或漏写 `$1` |
+| 提示文件不存在，但文件就在 `logs` 中 | `ls -l logs` | 路径写成了 `logs/app/log`，正确是 `logs/app.log` |
+| 统计结果为 0 | `grep "ERROR" logs/app.log` | 把 `ERROR` 拼成了 `ERRPR`，或大小写不一致 |
+| 提示权限不足 | `chmod +x log_analyze.sh` | 脚本没有执行权限 |
+| 出现 `^M` 或奇怪报错 | `sed -i 's/\r$//' log_analyze.sh` | 文件使用了 Windows 换行符 |
+| 不知道哪一行出错 | `bash -n log_analyze.sh` | 先检查 Shell 语法 |
+
+### 10. 易错点
+
+- Shebang 必须放在脚本第一行，路径也要正确。
+- 变量赋值的等号两边不能有空格，例如 `log_file="$1"`。
+- 使用变量时最好加双引号，例如 `"$log_file"`，避免路径中有空格时出错。
+- `[ ]` 内部的条件和方括号之间必须留空格。
+- 文件路径要写准确：本次文件是 `logs/app.log`，不是 `logs/app/log`。
+- 关键字要拼写准确：正确是 `ERROR`，不是 `ERRPR`。
+- `return` 主要返回状态码；需要输出文字时使用 `echo`。
+- Vim 中一行太长时可能自动换行显示，但不一定真的多出了一行。
+
+### 11. 今日流程速记
+
+**创建日志 -> 编写 Shell 脚本 -> 用 `$1` 接收文件路径 -> 判断文件是否存在 -> 用 `$2` 接收关键字 -> 统计并显示结果 -> `bash -n` 检查语法 -> `bash -x` 调试错误。**
