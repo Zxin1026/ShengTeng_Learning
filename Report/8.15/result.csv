@@ -1,0 +1,3 @@
+﻿file,accuracy_pct,latency_ms,accuracy_count,latency_count,diagnosis
+logs/run1.log,92.34,185.6,1,1,正常/待人工确认
+logs/run2.log,82.3,480.0,1,1,精度偏低：检查模型版本、权重、数据集、预处理和量化配置；耗时偏高：检查Batch Size、数据搬运、线程数和设备利用率

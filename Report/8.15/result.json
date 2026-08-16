@@ -1,0 +1,18 @@
+[
+  {
+    "file": "logs/run1.log",
+    "accuracy_pct": 92.34,
+    "latency_ms": 185.6,
+    "accuracy_count": 1,
+    "latency_count": 1,
+    "diagnosis": "正常/待人工确认"
+  },
+  {
+    "file": "logs/run2.log",
+    "accuracy_pct": 82.3,
+    "latency_ms": 480.0,
+    "accuracy_count": 1,
+    "latency_count": 1,
+    "diagnosis": "精度偏低：检查模型版本、权重、数据集、预处理和量化配置；耗时偏高：检查Batch Size、数据搬运、线程数和设备利用率"
+  }
+]
