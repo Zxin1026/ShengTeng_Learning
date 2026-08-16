@@ -748,3 +748,95 @@ sudo ./probe_service.sh 127.0.0.1 8080 http://127.0.0.1:8080/
 ### 10. 今日流程速记
 
 **确认实际端口 -> 启动服务 -> `ss` 查看 LISTEN -> 用相同端口执行 `curl` -> 脚本生成连通性报告 -> 根据返回码定位问题。**
+
+## 2026-08-17｜CentOS 镜像源、防火墙与服务端口
+
+### 1. 任务目标
+
+配置国内软件镜像源，开放业务端口，并确认服务可以访问，模拟上线前准备。
+
+### 2. CentOS 命令对应关系
+
+| 文档中的工具 | CentOS 中的工具 | 说明 |
+|---|---|---|
+| `apt` | `dnf` / `yum` | CentOS 使用它们安装和更新软件 |
+| `ufw` | `firewalld` | CentOS 默认使用的防火墙 |
+| `pip` | `pip` | Python 软件包工具，仍然可以使用 |
+
+图片中的内容是命令执行结果，不是新的操作指令。
+
+### 3. 配置 pip 国内镜像
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 安装 pip | `sudo dnf install -y python3-pip` | CentOS 7 可使用 `yum` |
+| 配置清华源 | `python3 -m pip config set --user global.index-url https://pypi.tuna.tsinghua.edu.cn/simple` | 以后安装 Python 包更快 |
+| 查看配置 | `python3 -m pip config list` | 确认镜像地址是否生效 |
+| 临时使用镜像 | `python3 -m pip install 包名 -i https://pypi.tuna.tsinghua.edu.cn/simple` | 只对本次安装生效 |
+
+### 4. 配置 dnf/yum 国内镜像
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 备份仓库配置 | `sudo cp -a /etc/yum.repos.d /etc/yum.repos.d.backup` | 修改前先留一份备份 |
+| 清理缓存 | `sudo dnf clean all` | 删除旧的缓存信息 |
+| 重新生成缓存 | `sudo dnf makecache` | 检查镜像是否能访问 |
+| 查看仓库 | `dnf repolist` | 确认软件源已启用 |
+
+CentOS 7/8 已停止维护，不能随意使用其他版本的仓库文件。应下载与系统版本匹配的国内镜像配置。
+
+### 5. 开放 8080 端口
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 启动防火墙 | `sudo systemctl enable --now firewalld` | 启动并设置开机自启 |
+| 开放端口 | `sudo firewall-cmd --permanent --add-port=8080/tcp` | `--` 是两个短横线 |
+| 重新加载规则 | `sudo firewall-cmd --reload` | 让新规则生效 |
+| 查看已开放端口 | `sudo firewall-cmd --list-ports` | 应看到 `8080/tcp` |
+
+防火墙开放端口，只表示允许访问；它不会自动启动业务程序。
+
+### 6. 查看端口和服务
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看全部监听端口 | `sudo ss -lntp` | 查看 TCP 监听端口和对应进程 |
+| 检查 8080 | `sudo ss -lntp \| grep 8080` | 没有输出表示没有服务监听 |
+| 测试本机服务 | `curl http://127.0.0.1:8080` | 测试 HTTP 服务是否能访问 |
+
+本次检查结果中：
+
+- `0.0.0.0:22` 和 `[::]:22` 是 SSH，表示 SSH 正在监听。
+- `127.0.0.1:631` 和 `[::1]:631` 是 CUPS，只允许本机访问。
+- `8080` 没有 `LISTEN`，所以 `curl` 会提示“拒绝连接”。
+
+### 7. 启动测试服务
+
+如果只是练习端口，可以运行：
+
+```bash
+mkdir -p ~/test-web
+echo "CentOS service is running" > ~/test-web/index.html
+cd ~/test-web
+python3 -m http.server 8080 --bind 0.0.0.0
+```
+
+另开一个终端检查：
+
+```bash
+sudo ss -lntp | grep 8080
+curl http://127.0.0.1:8080
+```
+
+### 8. 易错点
+
+- 正确写法是 `--add-port=8080/tcp`，少一个短横线会报参数错误。
+- 防火墙显示 `8080/tcp`，不代表 8080 已经有程序运行。
+- `curl` 拒绝连接，先用 `ss` 检查端口是否有 `LISTEN`。
+- 远程访问时，程序应监听 `0.0.0.0:8080`，不能只监听 `127.0.0.1:8080`。
+- 远程修改防火墙前，先确保 SSH 的 `22` 端口可以使用。
+- CentOS 使用 `dnf/yum + firewalld`，不是 Ubuntu 常用的 `apt + ufw`。
+
+### 9. 今日流程速记
+
+**配置 pip/dnf 镜像 -> 启动 firewalld -> 开放 8080 -> 用 `ss` 检查监听 -> 启动服务 -> 用 `curl` 测试。**
