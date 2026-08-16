@@ -569,3 +569,182 @@ awk 'BEGIN {print "开始"} {print NR, $1} END {print "结束"}' app.log
 ### 7. 今日流程速记
 
 **grep 查找 -> sed 修改 -> awk 提取和统计 -> 管道组合命令 -> 脚本解析日志 -> 生成指标报表。**
+
+## 2026-08-16｜推理服务端口探测与连通性报告
+
+### 1. 任务目标
+
+使用 `ss -tlnp` 查看服务端口是否监听，再使用 `curl` 测试 HTTP 接口，最后由 Shell 脚本生成连通性报告。
+
+### 2. 检查工具
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 安装网络工具 | `sudo dnf install -y iproute curl` | CentOS Stream 9 常用；CentOS 7 可用 `sudo yum install -y iproute curl` |
+| 检查 `ss` | `ss --version` | `ss` 通常由 `iproute` 提供 |
+| 检查 `curl` | `curl --version` | 用于访问 HTTP/HTTPS 服务 |
+| 查看当前路径 | `pwd` | 报告文件默认保存在当前目录 |
+
+### 3. 查看端口监听
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看全部 TCP 监听端口 | `sudo ss -tlnp` | `-t` TCP，`-l` 监听，`-n` 数字显示，`-p` 显示进程 |
+| 查看指定端口 | `sudo ss -tlnp \| grep ':8080'` | 检查 8080 是否有程序监听 |
+| 查看常见推理端口 | `sudo ss -lntp \| grep -E ':(8000\|8080\|7860\|11434)\b'` | 排查端口配置不一致 |
+| 没有匹配时给出提示 | `sudo ss -lntp \| grep ':8000' \|\| echo '8000 没有服务监听'` | `\|\|` 表示前一条命令失败时执行后一条 |
+
+如果没有看到 `LISTEN` 行，表示该端口没有程序监听，不能直接用 `curl` 访问。
+
+### 4. 使用 curl 测试服务
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 测试本机接口 | `curl -i http://127.0.0.1:8080/` | `127.0.0.1` 表示当前虚拟机 |
+| 设置连接超时 | `curl -i --connect-timeout 3 --max-time 8 URL` | 避免服务异常时一直等待 |
+| 查看详细过程 | `curl -v http://127.0.0.1:8080/` | 显示 DNS、TCP 和 HTTP 过程 |
+| 测试健康接口 | `curl -i http://127.0.0.1:8000/health` | 前提是服务确实提供 `/health` |
+
+常见结果：
+
+| 结果 | 含义 |
+|---|---|
+| `200 OK` | 服务可访问且请求成功 |
+| `404 Not Found` | 网络已连通，但接口路径不存在 |
+| `401` / `403` | 需要认证或没有权限 |
+| `500` | 服务端内部错误 |
+| `curl: (7) ... 拒绝连接` | 目标端口没有服务监听，或服务尚未启动 |
+| `Connection timed out` | 可能是网络路由或防火墙问题 |
+
+### 5. 端口参数必须保持一致
+
+如果 Python 服务启动在 `8080`：
+
+```bash
+python3 -m http.server 8080 --bind 127.0.0.1
+```
+
+就应在另一个终端检查 `8080`：
+
+```bash
+sudo ss -lntp | grep ':8080'
+sudo ./probe_service.sh 127.0.0.1 8080 http://127.0.0.1:8080/
+```
+
+不能让服务运行在 `8080`，却让脚本默认检查 `8000`。脚本中常见的默认参数写法如下：
+
+```bash
+HOST="${1:-127.0.0.1}"
+PORT="${2:-8080}"
+URL="${3:-http://${HOST}:${PORT}/}"
+```
+
+也可以不修改脚本，每次直接传入主机、端口和 URL。
+
+### 6. 连通性探测脚本
+
+`probe_service.sh` 示例：
+
+```bash
+#!/usr/bin/env bash
+
+set -u
+
+HOST="${1:-127.0.0.1}"
+PORT="${2:-8080}"
+URL="${3:-http://${HOST}:${PORT}/}"
+REPORT="connectivity_report_$(date +%Y%m%d_%H%M%S).txt"
+BODY_FILE="$(mktemp)"
+ERR_FILE="$(mktemp)"
+
+trap 'rm -f "$BODY_FILE" "$ERR_FILE"' EXIT
+
+{
+    echo "========== 推理服务连通性报告 =========="
+    echo "时间: $(date '+%F %T')"
+    echo "目标主机: $HOST"
+    echo "目标端口: $PORT"
+    echo "探测 URL: $URL"
+    echo
+
+    echo "[1] ss 端口监听检查"
+    ALL_LISTEN="$(ss -tlnp 2>/dev/null || true)"
+    LISTEN_INFO="$(printf '%s\n' "$ALL_LISTEN" | awk -v pattern=":${PORT}$" 'NR > 1 && $4 ~ pattern')"
+
+    if [[ -n "$LISTEN_INFO" ]]; then
+        echo "结果: 端口正在监听"
+        echo "$LISTEN_INFO"
+    else
+        echo "结果: 未发现端口监听"
+    fi
+
+    echo
+    echo "[2] curl HTTP 连通性检查"
+    HTTP_CODE="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' \
+        --connect-timeout 3 --max-time 8 "$URL" 2>"$ERR_FILE")"
+    CURL_RC=$?
+    [[ -n "$HTTP_CODE" ]] || HTTP_CODE="000"
+
+    echo "curl 返回码: $CURL_RC"
+    echo "HTTP 状态码: $HTTP_CODE"
+
+    if (( CURL_RC == 0 )); then
+        case "$HTTP_CODE" in
+            2*) echo "结果: HTTP 服务正常" ;;
+            3*) echo "结果: 服务可访问，但发生重定向" ;;
+            4*) echo "结果: 网络可达，但请求或接口可能有问题" ;;
+            5*) echo "结果: 服务端内部错误" ;;
+            *)  echo "结果: 已连接，但 HTTP 状态异常" ;;
+        esac
+    else
+        echo "结果: HTTP 连接失败"
+        sed 's/^/  /' "$ERR_FILE"
+    fi
+
+    echo
+    echo "========== 报告结束 =========="
+} | tee "$REPORT"
+
+echo "报告已保存到: $REPORT"
+```
+
+赋予执行权限并运行：
+
+```bash
+chmod +x probe_service.sh
+sudo ./probe_service.sh 127.0.0.1 8080 http://127.0.0.1:8080/
+```
+
+### 7. 报告文件
+
+| 文件 | 说明 |
+|---|---|
+| `connectivity_report_20260816_073746.txt` | 按日期和时间命名的连通性报告示例 |
+| `connectivity_report_*.txt` | 查看当前目录下所有报告 |
+| `cat connectivity_report_*.txt` | 查看报告内容 |
+| `pwd` | 确认报告所在目录 |
+
+脚本中的 `mktemp` 只创建临时文件，脚本退出时会由 `trap` 删除，不会留下额外的 `.txt` 文件。
+
+### 8. 是否需要两台虚拟机
+
+| 场景 | 是否需要两台虚拟机 | 说明 |
+|---|---|---|
+| 本机启动服务并本机探测 | 不需要 | 在同一台 CentOS 虚拟机开两个终端即可 |
+| 探测另一台服务器 | 需要另一台可访问的主机 | `ss` 在服务端执行，`curl` 可从客户端执行 |
+| 模拟 client/server 网络 | 可选 | 为练习远程访问时使用两台虚拟机 |
+
+### 9. 易错点
+
+- `surl` 是拼写错误，正确命令是 `curl`。
+- 服务监听在 `8080` 时，脚本不能默认检查 `8000`；主机、端口和 URL 必须一致。
+- `curl` 报“拒绝连接”通常表示端口没有监听，不是 `/health` 路径本身的问题。
+- Python `http.server` 默认没有 `/health` 接口，测试时优先使用 `/`。
+- 启动 Python 服务的终端必须保持运行；如果立刻回到命令提示符，应先检查启动报错。
+- `127.0.0.1` 只表示当前机器，不能用它探测另一台虚拟机。
+- 远程探测时，服务端要确认 `sshd`、服务监听地址和防火墙配置。
+- 报告文件生成在执行脚本时的当前目录，不一定在脚本文件所在目录。
+
+### 10. 今日流程速记
+
+**确认实际端口 -> 启动服务 -> `ss` 查看 LISTEN -> 用相同端口执行 `curl` -> 脚本生成连通性报告 -> 根据返回码定位问题。**
