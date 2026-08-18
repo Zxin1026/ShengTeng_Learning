@@ -1,12 +1,12 @@
 # 昇腾学习记录
 
-本仓库用于记录昇腾相关学习过程，采用“每日任务 + 理论笔记 + 可复现实验产物”的方式，逐步熟悉模型部署与调优工程师常用的 Linux、Shell、远程任务、日志分析、推理服务排障和上线前系统准备工作。
+本仓库用于记录昇腾相关学习过程，采用“每日任务 + 理论笔记 + 可复现实验产物”的方式，逐步熟悉模型部署与调优工程师常用的 Linux、Shell、Python、远程任务、日志分析、图片数据准备、推理服务排障和上线前系统准备工作。
 
-截至 2026-08-17，已完成 Day 1—Day 7，形成了 7 篇 Markdown 学习笔记、7 份每日任务文档、1 份命令速查表，以及日志解析和服务连通性实验产物。
+截至 2026-08-18，已完成 Day 1—Day 8，形成了 8 篇 Markdown 学习笔记、8 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性和图片数据准备实验产物。
 
 ## 学习路线
 
-当前已完成 Day 1—Day 7，学习主线如下：
+当前已完成 Day 1—Day 8，学习主线如下：
 
 ```text
 Linux 文件与目录
@@ -22,6 +22,8 @@ Shell 脚本与批量日志分析
 推理服务端口探测与连通性报告
         ↓
 CentOS 镜像源、防火墙与服务端口准备
+        ↓
+Python 基础与图片数据集准备
 ```
 
 ## 每日笔记
@@ -35,14 +37,15 @@ CentOS 镜像源、防火墙与服务端口准备
 | 2026-08-15 | 文本处理与推理日志指标 | 使用 `grep`、`sed`、`awk`、管道和重定向提取精度、耗时等指标 | [Day 5](./Daily_Note/day05.md) |
 | 2026-08-16 | 推理服务端口探测与连通性 | 使用 `ss` 检查监听端口，使用 `curl` 验证 HTTP 服务，并编写脚本生成连通性报告 | [Day 6](./Daily_Note/day06.md) |
 | 2026-08-17 | CentOS 上线前基础准备 | 配置 `pip`/`dnf` 镜像源，使用 `firewalld` 开放 8080 端口，并用 `ss`、`curl` 验证服务 | [Day 7](./Daily_Note/day07.md) |
+| 2026-08-18 | Python 基础与图片数据准备 | 学习 Python 类型、数据结构和控制流，使用 Pillow 批量分类、重命名图片并生成 CSV/JSON 标注 | [Day 8](./Daily_Note/day08.md) |
 
 ## 仓库结构
 
 ```text
 .
 ├── Daily_Note/       # 每日理论笔记、实验步骤和总结
-├── Daily_Task/       # 2026-08-11 至 2026-08-17 的每日任务材料（Word 97-2003）
-├── Report/           # 日志解析结果、端口探测脚本及实验报告
+├── Daily_Task/       # 2026-08-11 至 2026-08-18 的每日任务材料（Word 97-2003）
+├── Report/           # 日志解析、端口探测和图片数据准备实验产物
 ├── SearchTable.md    # 按日期整理的 Linux / Shell 命令速查表
 └── README.md         # 项目总览
 ```
@@ -60,6 +63,7 @@ CentOS 镜像源、防火墙与服务端口准备
 | 2026-08-15 | [8.15.doc](./Daily_Task/8.15.doc) | [Day 5](./Daily_Note/day05.md) |
 | 2026-08-16 | [8.16.doc](./Daily_Task/8.16.doc) | [Day 6](./Daily_Note/day06.md) |
 | 2026-08-17 | [8.17.doc](./Daily_Task/8.17.doc) | [Day 7](./Daily_Note/day07.md) |
+| 2026-08-18 | [8.18.doc](./Daily_Task/8.18.doc) | [Day 8](./Daily_Note/day08.md) |
 
 ## 快速入口
 
@@ -71,6 +75,10 @@ CentOS 镜像源、防火墙与服务端口准备
 - [Day 6 拒绝连接报告（8000）](./Report/8.16/connectivity_report_20260816_073746.txt)
 - [Day 6 连通成功报告（8080）](./Report/8.16/connectivity_report_20260816_074055.txt)
 - [Day 7 CentOS 镜像源、防火墙与服务端口笔记](./Daily_Note/day07.md)
+- [Day 8 Python 基础与图片数据准备笔记](./Daily_Note/day08.md)
+- [Day 8 图片数据集准备脚本](./Report/8.18/prepare_dataset.py)
+- [Day 8 CSV 标注结果](./Report/8.18/annotations.csv)
+- [Day 8 JSON 标注结果](./Report/8.18/annotations.json)
 - [Day 7 命令与排障速查](./SearchTable.md#2026-08-17centos-镜像源防火墙与服务端口)
 
 ## 实验脚本
@@ -102,6 +110,27 @@ Day 7 目前以笔记和命令速查为主，重点记录以下流程：
 
 需要注意：防火墙放行只代表允许连接，不能证明业务程序已经启动；远程访问还需确认程序监听 `0.0.0.0:8080`，并检查云安全组等外部网络策略。
 
+### 图片数据集准备
+
+`Report/8.18/prepare_dataset.py` 会递归扫描输入目录中的常见图片格式，以原始图片的第一级目录作为分类标签，按 `label_000001.jpg` 的格式复制或移动图片，并生成包含尺寸、文件大小、SHA-256 和读取状态的 CSV/JSON 标注清单。
+
+建议先使用 `--dry-run` 预览，确认分类和目标路径后再正式执行：
+
+```bash
+python3 Report/8.18/prepare_dataset.py \
+  --input ./raw \
+  --output ./dataset \
+  --mode copy \
+  --dry-run
+
+python3 Report/8.18/prepare_dataset.py \
+  --input ./raw \
+  --output ./dataset \
+  --mode copy
+```
+
+脚本默认使用 `copy` 保留原图，也支持 `--mode move`；需要安装 Pillow 才能检查图片尺寸和完整性。输出目录包含 `images/<label>/`、`annotations.csv` 和 `annotations.json`。本次示例共处理 4 张图片，分类为 `car`、`cat` 和 `dog`，图片检查状态均为 `ok`。
+
 ## 当前实验产物
 
 | 日期 | 产物 | 用途 |
@@ -110,7 +139,8 @@ Day 7 目前以笔记和命令速查为主，重点记录以下流程：
 | 2026-08-16 | `Report/8.16/probe_service.sh` | 使用 `ss` 和 `curl` 探测端口及 HTTP 服务 |
 | 2026-08-16 | 两份 `connectivity_report_*.txt` | 保存 8000 拒绝连接和 8080 连通成功的对照结果 |
 | 2026-08-17 | `SearchTable.md` 新增 CentOS 章节 | 汇总镜像源、防火墙、端口监听和服务验证命令 |
+| 2026-08-18 | `Report/8.18/prepare_dataset.py`、`annotations.csv`、`annotations.json` | 批量分类、重命名图片，并生成包含尺寸、哈希和状态的标注清单 |
 
 ## 后续方向
 
-在现有 Linux、日志处理和服务连通性排障基础上，继续补充昇腾开发环境部署、数据处理、容器化、模型转换、推理服务交付及性能调优等内容，并持续保留可复现的命令、脚本和结果。
+在现有 Linux、Python、日志处理、图片数据准备和服务连通性排障基础上，继续补充昇腾开发环境部署、容器化、模型转换、推理服务交付及性能调优等内容，并持续保留可复现的命令、脚本和结果。
