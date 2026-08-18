@@ -75,11 +75,11 @@ Python 基础与图片数据集准备
 - [Day 6 拒绝连接报告（8000）](./Report/8.16/connectivity_report_20260816_073746.txt)
 - [Day 6 连通成功报告（8080）](./Report/8.16/connectivity_report_20260816_074055.txt)
 - [Day 7 CentOS 镜像源、防火墙与服务端口笔记](./Daily_Note/day07.md)
+- [Day 7 命令与排障速查](./SearchTable.md#2026-08-17centos-镜像源防火墙与服务端口)
 - [Day 8 Python 基础与图片数据准备笔记](./Daily_Note/day08.md)
 - [Day 8 图片数据集准备脚本](./Report/8.18/prepare_dataset.py)
 - [Day 8 CSV 标注结果](./Report/8.18/annotations.csv)
 - [Day 8 JSON 标注结果](./Report/8.18/annotations.json)
-- [Day 7 命令与排障速查](./SearchTable.md#2026-08-17centos-镜像源防火墙与服务端口)
 
 ## 实验脚本
 
