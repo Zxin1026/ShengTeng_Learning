@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "source_file": "/home/zhangxin/cv_dataset/raw/car/car1.jpg",
+    "relative_source": "car/car1.jpg",
+    "output_file": "images/car/car_000001.jpg",
+    "label": "car",
+    "width": 375,
+    "height": 270,
+    "bytes": 8320,
+    "sha256": "f70b64b750b5451217ba623cbbbba6a43ca6e1906503cc7eed2fb4a5f923bbd9",
+    "status": "ok"
+  },
+  {
+    "id": 2,
+    "source_file": "/home/zhangxin/cv_dataset/raw/car/car2.jpg",
+    "relative_source": "car/car2.jpg",
+    "output_file": "images/car/car_000002.jpg",
+    "label": "car",
+    "width": 372,
+    "height": 270,
+    "bytes": 12058,
+    "sha256": "488d798e7465c2489f8826e19c0820ae2c343afd1c236e9554cd26969099f6f7",
+    "status": "ok"
+  },
+  {
+    "id": 3,
+    "source_file": "/home/zhangxin/cv_dataset/raw/cat/cat.jpg",
+    "relative_source": "cat/cat.jpg",
+    "output_file": "images/cat/cat_000001.jpg",
+    "label": "cat",
+    "width": 403,
+    "height": 270,
+    "bytes": 5976,
+    "sha256": "9dde9b364f75989cf35ce88582e60bc7dfaca22238aec8f6f92ab935b93c978c",
+    "status": "ok"
+  },
+  {
+    "id": 4,
+    "source_file": "/home/zhangxin/cv_dataset/raw/dog/dog.jpg",
+    "relative_source": "dog/dog.jpg",
+    "output_file": "images/dog/dog_000001.jpg",
+    "label": "dog",
+    "width": 390,
+    "height": 270,
+    "bytes": 8968,
+    "sha256": "77b68ee58419accede424ef00d3df6d6fc15cb0ce684695b79a145e457ecec7e",
+    "status": "ok"
+  }
+]

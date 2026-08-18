@@ -1,0 +1,5 @@
+﻿id,source_file,relative_source,output_file,label,width,height,bytes,sha256,status
+1,/home/zhangxin/cv_dataset/raw/car/car1.jpg,car/car1.jpg,images/car/car_000001.jpg,car,375,270,8320,f70b64b750b5451217ba623cbbbba6a43ca6e1906503cc7eed2fb4a5f923bbd9,ok
+2,/home/zhangxin/cv_dataset/raw/car/car2.jpg,car/car2.jpg,images/car/car_000002.jpg,car,372,270,12058,488d798e7465c2489f8826e19c0820ae2c343afd1c236e9554cd26969099f6f7,ok
+3,/home/zhangxin/cv_dataset/raw/cat/cat.jpg,cat/cat.jpg,images/cat/cat_000001.jpg,cat,403,270,5976,9dde9b364f75989cf35ce88582e60bc7dfaca22238aec8f6f92ab935b93c978c,ok
+4,/home/zhangxin/cv_dataset/raw/dog/dog.jpg,dog/dog.jpg,images/dog/dog_000001.jpg,dog,390,270,8968,77b68ee58419accede424ef00d3df6d6fc15cb0ce684695b79a145e457ecec7e,ok
