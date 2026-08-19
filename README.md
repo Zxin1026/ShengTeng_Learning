@@ -2,11 +2,11 @@
 
 本仓库用于记录昇腾相关学习过程，采用“每日任务 + 理论笔记 + 可复现实验产物”的方式，逐步熟悉模型部署与调优工程师常用的 Linux、Shell、Python、远程任务、日志分析、图片数据准备、推理服务排障和上线前系统准备工作。
 
-截至 2026-08-18，已完成 Day 1—Day 8，形成了 8 篇 Markdown 学习笔记、8 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性和图片数据准备实验产物。
+截至 2026-08-19，已完成 Day 1—Day 9，形成了 9 篇 Markdown 学习笔记、9 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性、图片数据准备和 JSON 推理结果报表实验产物。
 
 ## 学习路线
 
-当前已完成 Day 1—Day 8，学习主线如下：
+当前已完成 Day 1—Day 9，学习主线如下：
 
 ```text
 Linux 文件与目录
@@ -24,6 +24,8 @@ Shell 脚本与批量日志分析
 CentOS 镜像源、防火墙与服务端口准备
         ↓
 Python 基础与图片数据集准备
+        ↓
+JSON 推理结果读取与 Markdown 报表
 ```
 
 ## 每日笔记
@@ -38,14 +40,15 @@ Python 基础与图片数据集准备
 | 2026-08-16 | 推理服务端口探测与连通性 | 使用 `ss` 检查监听端口，使用 `curl` 验证 HTTP 服务，并编写脚本生成连通性报告 | [Day 6](./Daily_Note/day06.md) |
 | 2026-08-17 | CentOS 上线前基础准备 | 配置 `pip`/`dnf` 镜像源，使用 `firewalld` 开放 8080 端口，并用 `ss`、`curl` 验证服务 | [Day 7](./Daily_Note/day07.md) |
 | 2026-08-18 | Python 基础与图片数据准备 | 学习 Python 类型、数据结构和控制流，使用 Pillow 批量分类、重命名图片并生成 CSV/JSON 标注 | [Day 8](./Daily_Note/day08.md) |
+| 2026-08-19 | Python 函数、JSON 推理结果与格式化报表 | 使用 `json`、`pathlib` 和函数读取推理结果，生成 Markdown 报表，并在 CentOS 中运行脚本 | [Day 9](./Daily_Note/day09.md) |
 
 ## 仓库结构
 
 ```text
 .
 ├── Daily_Note/       # 每日理论笔记、实验步骤和总结
-├── Daily_Task/       # 2026-08-11 至 2026-08-18 的每日任务材料（Word 97-2003）
-├── Report/           # 日志解析、端口探测和图片数据准备实验产物
+├── Daily_Task/       # 2026-08-11 至 2026-08-19 的每日任务材料（Word 97-2003）
+├── Report/           # 日志解析、端口探测、图片数据准备和 JSON 报表实验产物
 ├── SearchTable.md    # 按日期整理的 Linux / Shell 命令速查表
 └── README.md         # 项目总览
 ```
@@ -64,6 +67,7 @@ Python 基础与图片数据集准备
 | 2026-08-16 | [8.16.doc](./Daily_Task/8.16.doc) | [Day 6](./Daily_Note/day06.md) |
 | 2026-08-17 | [8.17.doc](./Daily_Task/8.17.doc) | [Day 7](./Daily_Note/day07.md) |
 | 2026-08-18 | [8.18.doc](./Daily_Task/8.18.doc) | [Day 8](./Daily_Note/day08.md) |
+| 2026-08-19 | [8.19.doc](./Daily_Task/8.19.doc) | [Day 9](./Daily_Note/day09.md) |
 
 ## 快速入口
 
@@ -80,6 +84,11 @@ Python 基础与图片数据集准备
 - [Day 8 图片数据集准备脚本](./Report/8.18/prepare_dataset.py)
 - [Day 8 CSV 标注结果](./Report/8.18/annotations.csv)
 - [Day 8 JSON 标注结果](./Report/8.18/annotations.json)
+- [Day 9 Python 函数、JSON 与报表笔记](./Daily_Note/day09.md)
+- [Day 9 JSON 推理示例](./Report/8.19/inference.json)
+- [Day 9 报表生成脚本](./Report/8.19/report.py)
+- [Day 9 一键运行脚本](./Report/8.19/run_report.sh)
+- [Day 9 Markdown 报表结果](./Report/8.19/report.md)
 
 ## 实验脚本
 
@@ -131,6 +140,31 @@ python3 Report/8.18/prepare_dataset.py \
 
 脚本默认使用 `copy` 保留原图，也支持 `--mode move`；需要安装 Pillow 才能检查图片尺寸和完整性。输出目录包含 `images/<label>/`、`annotations.csv` 和 `annotations.json`。本次示例共处理 4 张图片，分类为 `car`、`cat` 和 `dog`，图片检查状态均为 `ok`。
 
+### JSON 推理结果格式化报表
+
+`Report/8.19/report.py` 用于读取 JSON 推理结果并生成 Markdown 报表，支持从 `results`、`predictions`、`outputs`、`items` 或 `data` 字段中识别结果列表；当结果不是字典列表时，会保留为编号列表或原始 JSON，便于排查不同模型输出格式。
+
+直接运行：
+
+```bash
+python3 Report/8.19/report.py \
+  Report/8.19/inference.json \
+  Report/8.19/report.md
+```
+
+也可以使用 `Report/8.19/run_report.sh` 在 CentOS 的固定工作目录 `/opt/json-report` 中执行：
+
+```bash
+sudo mkdir -p /opt/json-report
+sudo cp Report/8.19/report.py Report/8.19/inference.json Report/8.19/run_report.sh /opt/json-report/
+sudo chmod +x /opt/json-report/run_report.sh
+/opt/json-report/run_report.sh
+```
+
+该脚本默认从 `/opt/json-report/inference.json` 读取，并将结果写入 `/opt/json-report/report.md`；如果改用其他目录，需要同步调整脚本中的 `BASE_DIR`。
+
+示例输入包含 `model`、`task`、`timestamp`、`status`、`summary` 和 `results` 字段，生成结果见 [report.md](./Report/8.19/report.md)。脚本只负责读取和整理已有 JSON，不负责执行模型推理；运行前应先用 `jq empty <file>.json` 检查 JSON 格式。
+
 ## 当前实验产物
 
 | 日期 | 产物 | 用途 |
@@ -140,6 +174,7 @@ python3 Report/8.18/prepare_dataset.py \
 | 2026-08-16 | 两份 `connectivity_report_*.txt` | 保存 8000 拒绝连接和 8080 连通成功的对照结果 |
 | 2026-08-17 | `SearchTable.md` 新增 CentOS 章节 | 汇总镜像源、防火墙、端口监听和服务验证命令 |
 | 2026-08-18 | `Report/8.18/prepare_dataset.py`、`annotations.csv`、`annotations.json` | 批量分类、重命名图片，并生成包含尺寸、哈希和状态的标注清单 |
+| 2026-08-19 | `Report/8.19/report.py`、`run_report.sh`、`inference.json`、`report.md` | 读取 JSON 推理输出，生成可读的 Markdown 结果报表 |
 
 ## 后续方向
 
