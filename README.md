@@ -2,7 +2,7 @@
 
 本仓库用于记录昇腾相关学习过程，采用“每日任务 + 理论笔记 + 可复现实验产物”的方式，逐步熟悉模型部署与调优工程师常用的 Linux、Shell、Python、远程任务、日志分析、图片数据准备、推理服务排障和上线前系统准备工作。
 
-截至 2026-08-19，已完成 Day 1—Day 9，形成了 9 篇 Markdown 学习笔记、9 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性、图片数据准备和 JSON 推理结果报表实验产物。
+截至 2026-08-20，已完成 Day 1—Day 10，形成了 10 篇 Markdown 学习笔记、10 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性、图片数据准备、JSON 推理结果报表和 AI 接口批量调用实验产物。
 
 ## 学习路线
 
@@ -26,6 +26,8 @@ CentOS 镜像源、防火墙与服务端口准备
 Python 基础与图片数据集准备
         ↓
 JSON 推理结果读取与 Markdown 报表
+        ↓
+requests 调用 AI 接口、异常处理与进度条
 ```
 
 ## 每日笔记
@@ -41,14 +43,15 @@ JSON 推理结果读取与 Markdown 报表
 | 2026-08-17 | CentOS 上线前基础准备 | 配置 `pip`/`dnf` 镜像源，使用 `firewalld` 开放 8080 端口，并用 `ss`、`curl` 验证服务 | [Day 7](./Daily_Note/day07.md) |
 | 2026-08-18 | Python 基础与图片数据准备 | 学习 Python 类型、数据结构和控制流，使用 Pillow 批量分类、重命名图片并生成 CSV/JSON 标注 | [Day 8](./Daily_Note/day08.md) |
 | 2026-08-19 | Python 函数、JSON 推理结果与格式化报表 | 使用 `json`、`pathlib` 和函数读取推理结果，生成 Markdown 报表，并在 CentOS 中运行脚本 | [Day 9](./Daily_Note/day09.md) |
+| 2026-08-20 | requests 调用 AI 接口、异常处理与进度条 | 使用虚拟环境安装依赖，调用 OpenAI 兼容接口，处理超时/限流/服务端错误并保存 JSONL 结果 | [Day 10](./Daily_Note/day10.md) |
 
 ## 仓库结构
 
 ```text
 .
 ├── Daily_Note/       # 每日理论笔记、实验步骤和总结
-├── Daily_Task/       # 2026-08-11 至 2026-08-19 的每日任务材料（Word 97-2003）
-├── Report/           # 日志解析、端口探测、图片数据准备和 JSON 报表实验产物
+├── Daily_Task/       # 2026-08-11 至 2026-08-20 的每日任务材料（Word 97-2003）
+├── Report/           # 日志解析、端口探测、图片数据准备、JSON 报表和 AI 接口实验产物
 ├── SearchTable.md    # 按日期整理的 Linux / Shell 命令速查表
 └── README.md         # 项目总览
 ```
@@ -68,6 +71,7 @@ JSON 推理结果读取与 Markdown 报表
 | 2026-08-17 | [8.17.doc](./Daily_Task/8.17.doc) | [Day 7](./Daily_Note/day07.md) |
 | 2026-08-18 | [8.18.doc](./Daily_Task/8.18.doc) | [Day 8](./Daily_Note/day08.md) |
 | 2026-08-19 | [8.19.doc](./Daily_Task/8.19.doc) | [Day 9](./Daily_Note/day09.md) |
+| 2026-08-20 | [8.20.doc](./Daily_Task/8.20.doc) | [Day 10](./Daily_Note/day10.md) |
 
 ## 快速入口
 
@@ -89,6 +93,11 @@ JSON 推理结果读取与 Markdown 报表
 - [Day 9 报表生成脚本](./Report/8.19/report.py)
 - [Day 9 一键运行脚本](./Report/8.19/run_report.sh)
 - [Day 9 Markdown 报表结果](./Report/8.19/report.md)
+- [Day 10 requests 调用 AI 接口笔记](./Daily_Note/day10.md)
+- [Day 10 AI 批量推理脚本](./Report/8.20/ai_infer.py)
+- [Day 10 示例问题列表](./Report/8.20/prompts.txt)
+- [Day 10 JSONL 推理结果](./Report/8.20/results.jsonl)
+- [Day 10 命令与排障速查](./SearchTable.md#2026-08-20requests-调用-ai-接口异常处理与进度条)
 
 ## 实验脚本
 
@@ -165,6 +174,37 @@ sudo chmod +x /opt/json-report/run_report.sh
 
 示例输入包含 `model`、`task`、`timestamp`、`status`、`summary` 和 `results` 字段，生成结果见 [report.md](./Report/8.19/report.md)。脚本只负责读取和整理已有 JSON，不负责执行模型推理；运行前应先用 `jq empty <file>.json` 检查 JSON 格式。
 
+### AI 接口批量调用与结果保存
+
+`Report/8.20/ai_infer.py` 是一个使用 `requests` 调用 OpenAI 兼容聊天接口的批处理示例。脚本从文本文件逐行读取问题，使用 `tqdm` 显示进度，并将每条请求的成功结果或错误信息立即写入 JSONL 文件，便于任务中断后保留已完成记录。
+
+运行前先创建并激活虚拟环境，安装依赖，并通过环境变量提供接口地址、API Key 和模型名：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install requests tqdm
+
+export AI_API_URL="https://api.example.com/v1/chat/completions"
+export AI_API_KEY="你的_API_KEY"
+export AI_MODEL="你的模型名称"
+```
+
+建议先用 `curl` 验证 URL、鉴权和请求路径，再执行批量脚本：
+
+```bash
+curl -i -sS "$AI_API_URL" \
+  -H "Authorization: Bearer $AI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"'"$AI_MODEL"'","messages":[{"role":"user","content":"你好"}]}'
+
+python Report/8.20/ai_infer.py \
+  --input Report/8.20/prompts.txt \
+  --output Report/8.20/results.jsonl
+```
+
+脚本对超时、连接异常、`429` 和 `5xx` 错误进行有限重试，对其他 `4xx` 错误直接报告；每完成一条请求都会 `flush()` 输出文件。仓库中的 `prompts.txt` 仅为示例问题，当前 `results.jsonl` 为空，未包含真实 API 调用结果。不要把真实 API Key 写入脚本或提交到仓库。
+
 ## 当前实验产物
 
 | 日期 | 产物 | 用途 |
@@ -175,7 +215,8 @@ sudo chmod +x /opt/json-report/run_report.sh
 | 2026-08-17 | `SearchTable.md` 新增 CentOS 章节 | 汇总镜像源、防火墙、端口监听和服务验证命令 |
 | 2026-08-18 | `Report/8.18/prepare_dataset.py`、`annotations.csv`、`annotations.json` | 批量分类、重命名图片，并生成包含尺寸、哈希和状态的标注清单 |
 | 2026-08-19 | `Report/8.19/report.py`、`run_report.sh`、`inference.json`、`report.md` | 读取 JSON 推理输出，生成可读的 Markdown 结果报表 |
+| 2026-08-20 | `Report/8.20/ai_infer.py`、`prompts.txt`、`results.jsonl` | 调用 AI 接口，显示批量进度，有限重试并逐条保存成功/失败结果 |
 
 ## 后续方向
 
-在现有 Linux、Python、日志处理、图片数据准备和服务连通性排障基础上，继续补充昇腾开发环境部署、容器化、模型转换、推理服务交付及性能调优等内容，并持续保留可复现的命令、脚本和结果。
+在现有 Linux、Python、日志处理、图片数据准备、服务连通性排障和 AI 接口调用基础上，继续补充昇腾开发环境部署、容器化、模型转换、推理服务交付及性能调优等内容，并持续保留可复现的命令、脚本和结果。
