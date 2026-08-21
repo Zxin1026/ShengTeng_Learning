@@ -1039,3 +1039,159 @@ dataset/annotations.json
 ### 6. 今日流程速记
 
 **创建并激活虚拟环境 -> 安装 `requests` 和 `tqdm` -> 设置 API 地址和 Key -> 先用 `curl` 测试 -> Python 调接口 -> 处理异常并重试 -> 用 `tqdm` 显示进度 -> 保存成功和失败结果。**
+
+## 2026-08-21｜Docker 安装、镜像与 Python 环境
+
+### 1. CentOS Stream 9 安装 Docker
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看系统版本 | `cat /etc/centos-release` | 确认当前使用的是 CentOS Stream 9 |
+| 安装基础工具 | `sudo dnf install -y dnf-plugins-core ca-certificates curl` | 为添加软件源和访问 HTTPS 做准备 |
+| 添加 Docker 软件源 | `sudo dnf config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo` | 网络访问官方源失败时可换成阿里云源 |
+| 清理软件缓存 | `sudo dnf clean all` | 删除旧的仓库缓存 |
+| 生成软件缓存 | `sudo dnf makecache --refresh` | 检查软件源是否能正常访问 |
+| 安装 Docker | `sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin` | 安装 Docker 引擎、命令行和 Compose 插件 |
+| 启动并设置开机启动 | `sudo systemctl enable --now docker` | 启动 Docker 服务，并让它开机自动启动 |
+| 查看服务状态 | `sudo systemctl status docker --no-pager` | 看到 `active (running)` 表示服务正常 |
+
+### 2. Docker 的基本概念
+
+| 理论要点 | 我的理解（概念） | 为什么重要 / 用在哪里 | 易错点 / 我踩过的坑 |
+|---|---|---|---|
+| 容器和虚拟机 | 虚拟机像一台完整的小电脑；容器是隔离出来的运行环境，启动更快、占用资源更少。 | 部署 Python、PyTorch 等环境时，可以减少环境冲突。 | 容器不是完整虚拟机，它和宿主机共享部分系统资源。 |
+| 镜像、容器、仓库 | 镜像是运行环境模板，容器是镜像启动后的实例，仓库用来保存和下载镜像。 | 使用 `pull`、`run`、`ps` 等命令时需要区分它们。 | 镜像和容器不是同一个东西；本地没有镜像时，`docker run` 会先尝试下载。 |
+| Docker C/S 架构 | Docker 客户端接收命令，Docker 服务端（daemon）负责真正创建和管理容器。 | 可以理解为什么 Docker 服务没有启动时，命令会报错。 | 修改配置后要重启 daemon，单纯重新打开终端不会让配置生效。 |
+| 镜像分层 | 一个镜像由多层文件组成，相同的层可以重复使用。 | 下载和构建镜像时可以节省空间和时间。 | 删除一个标签不一定删除所有实际数据；正在使用的镜像不能随便删除。 |
+
+### 3. Docker 服务和权限
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看 Docker 版本 | `sudo docker version` | 确认客户端和服务端是否都能响应 |
+| 测试容器 | `sudo docker run --rm hello-world` | `--rm` 表示运行结束后自动删除容器 |
+| 查看运行中的容器 | `sudo docker ps` | 只显示正在运行的容器 |
+| 查看所有容器 | `sudo docker ps -a` | 包括已经停止的容器 |
+| 允许当前用户使用 Docker | `sudo usermod -aG docker "$USER"` | 把当前用户加入 docker 组 |
+| 立即刷新用户组 | `newgrp docker` | 也可以退出终端后重新登录 |
+
+普通用户如果没有加入 `docker` 组，执行 Docker 命令可能出现权限不足，此时可以暂时在命令前加 `sudo`。
+
+### 4. Docker 软件源和镜像加速器
+
+这两个配置作用不同：
+
+| 配置内容 | 作用 | 常见位置 |
+|---|---|---|
+| Docker 软件源 | 下载和安装 Docker 软件包 | `/etc/yum.repos.d/docker-ce.repo` |
+| Docker 镜像加速器 | 加快 `docker pull` 下载镜像 | `/etc/docker/daemon.json` |
+
+只把 Docker 软件源换成阿里云，并不会自动让 `docker pull` 使用阿里云加速器。
+
+创建 Docker 配置文件：
+
+```bash
+sudo mkdir -p /etc/docker
+sudo vi /etc/docker/daemon.json
+```
+
+写入阿里云控制台提供的专属加速地址：
+
+```json
+{
+  "registry-mirrors": [
+    "https://你的专属地址.mirror.aliyuncs.com"
+  ]
+}
+```
+
+检查配置并重启 Docker：
+
+```bash
+sudo dockerd --validate --config-file=/etc/docker/daemon.json
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+```
+
+查看加速器是否生效：
+
+```bash
+sudo docker info | sed -n '/Registry Mirrors:/,/Live Restore Enabled/p'
+```
+
+### 5. 镜像常用操作
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 下载镜像 | `sudo docker pull hello-world` | 从仓库下载镜像到本地 |
+| 查看本地镜像 | `sudo docker images` | 查看镜像名称、标签和大小 |
+| 给镜像改名或增加标签 | `sudo docker tag 原镜像 新镜像` | 不会复制一份新的镜像数据 |
+| 删除镜像 | `sudo docker rmi 镜像名:标签` | 删除前要确认没有容器正在使用 |
+| 运行一次性容器 | `sudo docker run --rm hello-world` | 运行结束后自动清理容器 |
+
+本次拉取 `hello-world` 时遇到：
+
+```text
+connect: connection refused
+```
+
+原因是 Docker 直接访问 `registry-1.docker.io` 失败。排查顺序是：
+
+```bash
+sudo cat /etc/docker/daemon.json
+sudo docker info
+sudo systemctl status docker --no-pager
+sudo docker pull hello-world
+```
+
+如果提示 `/etc/docker/daemon.json` 不存在，说明配置文件还没有创建，并不代表 Docker 安装失败。
+
+### 6. Python 版本与 Docker 镜像
+
+宿主机执行：
+
+```bash
+python --version
+```
+
+得到 `Python 3.9.25`，只说明 CentOS 宿主机的 Python 版本。容器中的 Python 与宿主机相互独立。
+
+| 需求 | 镜像或命令 | 说明 |
+|---|---|---|
+| 使用 Python 3.9 | `sudo docker pull python:3.9-slim-bookworm` | 与当前宿主机版本接近，适合兼容旧项目 |
+| 检查容器 Python | `sudo docker run --rm python:3.9-slim-bookworm python --version` | 不会修改宿主机 Python |
+| 进入 Python 容器 | `sudo docker run --rm -it python:3.9-slim-bookworm bash` | 在容器中交互学习 |
+| 使用更新版本 | `python:3.11-slim-bookworm` 或 `python:3.12-slim-bookworm` | 没有版本限制时可选择较新的 Python |
+
+如果项目要求 Python 3.9，就拉取 `python:3.9`；不要求固定版本时，不必同时拉取多个版本。
+
+### 7. PyTorch 镜像示例
+
+```bash
+sudo docker pull pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime
+```
+
+检查 PyTorch 是否安装：
+
+```bash
+sudo docker run --rm \
+  pytorch/pytorch:2.4.1-cuda12.1-cudnn9-runtime \
+  python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
+`torch.cuda.is_available()` 输出 `False` 不一定代表 PyTorch 安装失败，也可能是没有配置 NVIDIA 驱动或 GPU 容器运行时。
+
+### 8. 易错点
+
+- `dnf` 使用的是软件包源；`docker pull` 使用的是容器镜像仓库，两个配置不能混为一谈。
+- 阿里云 Docker 软件源可以解决安装包下载问题，但不一定自动解决 Docker Hub 镜像下载问题。
+- `/etc/docker/daemon.json` 不存在时，需要使用 `sudo mkdir -p /etc/docker` 后手动创建。
+- 修改 `daemon.json` 后必须执行 `sudo systemctl restart docker`。
+- `docker run` 会在本地没有镜像时自动拉取镜像，因此网络不通时会报错。
+- `python --version` 查看的是宿主机 Python；容器 Python 要用 `docker run ... python --version` 查看。
+- `hello-world` 只是测试 Docker 是否能拉取和运行镜像，不是 Python 或 PyTorch 环境。
+- 镜像标签必须写对，例如 `python:3.9-slim-bookworm`；标签不存在时需要更换版本或镜像来源。
+
+### 9. 今日流程速记
+
+**确认 CentOS 版本 -> 配置 Docker 软件源 -> 安装 Docker -> 用 `systemctl` 启动服务 -> 创建镜像加速器配置 -> 重启并用 `docker info` 检查 -> 拉取 `hello-world` -> 拉取 Python/PyTorch 镜像 -> 运行容器验证。**
