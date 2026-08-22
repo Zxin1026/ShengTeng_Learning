@@ -1195,3 +1195,148 @@ sudo docker run --rm \
 ### 9. 今日流程速记
 
 **确认 CentOS 版本 -> 配置 Docker 软件源 -> 安装 Docker -> 用 `systemctl` 启动服务 -> 创建镜像加速器配置 -> 重启并用 `docker info` 检查 -> 拉取 `hello-world` -> 拉取 Python/PyTorch 镜像 -> 运行容器验证。**
+
+## 2026-08-22｜Docker 生命周期、exec 与 CPU 推理容器
+
+### 1. 先确认 Docker 环境
+
+| 目的 | 命令 | 说明 |
+|---|---|---|
+| 查看系统版本 | `cat /etc/centos-release` | 确认使用的是 CentOS Stream 9 |
+| 查看 CPU 架构 | `uname -m` | `x86_64` 表示使用常见的 64 位架构 |
+| 查看 Docker 版本 | `docker --version` | 确认 Docker 客户端已安装 |
+| 查看 Compose 版本 | `docker compose version` | 确认 Compose 插件可用 |
+| 查看服务状态 | `systemctl is-active docker` | 输出 `active` 表示 Docker 正在运行 |
+| 查看镜像 | `docker image ls` | 查看本地已有镜像 |
+| 查看容器 | `docker ps -a` | 查看运行中和已停止的容器 |
+
+本次环境中 Docker 服务正常，已有 Python 和 PyTorch 镜像，但开始操作前没有运行中的容器。
+
+### 2. Docker 生命周期命令
+
+| 命令 | 我的理解 | 常用场景 |
+|---|---|---|
+| `docker run` | 根据镜像创建并启动一个新容器 | 第一次运行应用 |
+| `docker start` | 启动已经停止的容器 | 重复使用旧容器 |
+| `docker stop` | 停止正在运行的容器 | 暂停服务 |
+| `docker restart` | 停止后重新启动容器 | 配置变更或服务异常时 |
+| `docker rm` | 删除容器 | 清理不再使用的容器 |
+| `docker ps` | 查看运行中的容器 | 确认容器是否为 `Up` |
+| `docker ps -a` | 查看所有容器 | 查找已经退出的容器 |
+| `docker logs 容器名` | 查看容器输出 | 排查启动失败或程序报错 |
+
+易错点：`docker exec` 只能进入运行中的容器；`docker ps` 默认不会显示已经停止的容器；运行中的容器不能直接删除。
+
+### 3. `docker run` 常用参数
+
+| 参数 | 我的理解 | 示例 |
+|---|---|---|
+| `-d` | 让容器在后台运行 | `docker run -d ...` |
+| `--name` | 给容器取一个容易记的名字 | `--name python-infer-cpu` |
+| `-p` | 映射端口，格式是“主机端口:容器端口” | `-p 8080:8080` |
+| `-v` | 挂载目录，格式是“主机目录:容器目录” | `-v "$HOME/docker-infer-cpu:/app:Z"` |
+| `-it` | 分配终端并允许交互操作 | `docker exec -it 容器名 sh` |
+| `--rm` | 容器结束后自动删除 | `docker run --rm hello-world` |
+
+### 4. 创建 CPU 推理脚本
+
+`infer.py` 示例：
+
+```python
+import argparse
+import json
+
+
+def predict(text):
+    text_lower = text.lower()
+    label = "positive" if any(
+        word in text_lower for word in ["good", "great", "excellent", "好", "优秀"]
+    ) else "neutral"
+
+    return {
+        "input": text,
+        "label": label,
+        "device": "cpu"
+    }
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--text", required=True)
+args = parser.parse_args()
+
+print(json.dumps(predict(args.text), ensure_ascii=False))
+```
+
+### 5. 启动并进入 Python 容器
+
+创建脚本目录：
+
+```bash
+mkdir -p "$HOME/docker-infer-cpu"
+vi "$HOME/docker-infer-cpu/infer.py"
+```
+
+启动容器：
+
+```bash
+docker run -d \
+  --name python-infer-cpu \
+  --restart unless-stopped \
+  -v "$HOME/docker-infer-cpu:/app:Z" \
+  python:3.12-slim-bookworm \
+  python -c 'import time; time.sleep(10**9)'
+```
+
+确认容器运行：
+
+```bash
+docker ps --filter name=python-infer-cpu
+```
+
+进入容器：
+
+```bash
+docker exec -it python-infer-cpu sh
+```
+
+执行推理：
+
+```bash
+/usr/local/bin/python /app/infer.py \
+  --text "CPU Docker inference test"
+```
+
+预期输出：
+
+```json
+{"input": "CPU Docker inference test", "label": "neutral", "device": "cpu"}
+```
+
+也可以不进入 shell，直接执行：
+
+```bash
+docker exec python-infer-cpu \
+  /usr/local/bin/python /app/infer.py \
+  --text "CPU Docker inference test"
+```
+
+### 6. CPU 模式说明
+
+- 本次使用 `python:3.12-slim-bookworm` 镜像，不需要 GPU。
+- `docker run` 命令中没有使用 `--gpus all`。
+- `docker info` 中即使看到 `nvidia` runtime，也不代表容器一定使用 GPU。
+- 不使用 `nvidia-smi`，也不需要安装 NVIDIA Container Toolkit。
+- 真实 PyTorch 推理也可以先不加 `--gpus all`，但大型 PyTorch 镜像占用空间和内存较多。
+
+### 7. 容器与宿主机的边界
+
+| 内容 | 我的理解 | 易错点 |
+|---|---|---|
+| 文件系统 | 容器有自己的文件系统；通过 `-v` 才能共享宿主机目录 | 容器删除后，未挂载的数据可能丢失 |
+| 网络 | 容器有自己的网络；通过 `-p` 才能让主机访问容器端口 | 容器里的 `localhost` 指向容器自己，不是宿主机 |
+| 进程 | 容器中的进程与宿主机进程隔离 | `docker exec` 执行的是容器内命令 |
+| 权限 | 容器内外的用户和文件权限可能不同 | CentOS 开启 SELinux 时，目录挂载通常加 `:Z` |
+
+### 8. 今日流程速记
+
+**确认 Docker 环境 -> 查看已有镜像 -> 编写 Python 推理脚本 -> 用 `docker run -d` 启动 CPU 容器 -> 用 `docker ps` 查看状态 -> 用 `docker exec -it` 进入容器 -> 执行 Python 推理 -> 查看 JSON 输出。**
