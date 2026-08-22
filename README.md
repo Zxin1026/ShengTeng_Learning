@@ -2,11 +2,11 @@
 
 本仓库用于记录昇腾相关学习过程，采用“每日任务 + 理论笔记 + 可复现实验产物”的方式，逐步熟悉模型部署与调优工程师常用的 Linux、Shell、Python、远程任务、日志分析、图片数据准备、推理服务排障和上线前系统准备工作。
 
-截至 2026-08-21，已完成 Day 1—Day 11，形成了 11 篇 Markdown 学习笔记、11 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性、图片数据准备、JSON 推理结果报表、AI 接口批量调用和 Docker 环境准备等实验产物。
+截至 2026-08-22，已完成 Day 1—Day 12，形成了 12 篇 Markdown 学习笔记、12 份每日任务文档、1 份命令速查表，以及日志解析、服务连通性、图片数据准备、JSON 推理结果报表、AI 接口批量调用和 Docker 容器推理等实验产物。
 
 ## 学习路线
 
-当前已完成 Day 1—Day 11，学习主线如下：
+当前已完成 Day 1—Day 12，学习主线如下：
 
 ```text
 Linux 文件与目录
@@ -30,6 +30,8 @@ JSON 推理结果读取与 Markdown 报表
 requests 调用 AI 接口、异常处理与进度条
         ↓
 Docker 安装、镜像管理与容器化 Python/PyTorch 环境
+        ↓
+Docker 生命周期、exec、目录挂载与 CPU Python 推理容器
 ```
 
 ## 每日笔记
@@ -47,13 +49,14 @@ Docker 安装、镜像管理与容器化 Python/PyTorch 环境
 | 2026-08-19 | Python 函数、JSON 推理结果与格式化报表 | 使用 `json`、`pathlib` 和函数读取推理结果，生成 Markdown 报表，并在 CentOS 中运行脚本 | [Day 9](./Daily_Note/day09.md) |
 | 2026-08-20 | requests 调用 AI 接口、异常处理与进度条 | 使用虚拟环境安装依赖，调用 OpenAI 兼容接口，处理超时/限流/服务端错误并保存 JSONL 结果 | [Day 10](./Daily_Note/day10.md) |
 | 2026-08-21 | Docker 概念、安装与镜像 | 在 CentOS Stream 9 安装 Docker CE，区分软件源与镜像加速器，管理 Python/PyTorch 镜像并验证容器环境 | [Day 11](./Daily_Note/day11.md) |
+| 2026-08-22 | Docker 生命周期与容器内推理 | 使用 `docker run -d` 启动 CPU Python 容器，用 `docker ps` 查看状态，用 `docker exec` 执行推理脚本，并练习 `-v` 目录挂载 | [Day 12](./Daily_Note/day12.md) |
 
 ## 仓库结构
 
 ```text
 .
 ├── Daily_Note/       # 每日理论笔记、实验步骤和总结
-├── Daily_Task/       # 2026-08-11 至 2026-08-21 的每日任务材料（Word 97-2003）
+├── Daily_Task/       # 2026-08-11 至 2026-08-22 的每日任务材料（Word 97-2003）
 ├── Report/           # 日志解析、端口探测、图片数据准备、JSON 报表和 AI 接口实验产物
 ├── SearchTable.md    # 按日期整理的 Linux、Shell、Python 与 Docker 命令速查表
 └── README.md         # 项目总览
@@ -76,6 +79,7 @@ Docker 安装、镜像管理与容器化 Python/PyTorch 环境
 | 2026-08-19 | [8.19.doc](./Daily_Task/8.19.doc) | [Day 9](./Daily_Note/day09.md) |
 | 2026-08-20 | [8.20.doc](./Daily_Task/8.20.doc) | [Day 10](./Daily_Note/day10.md) |
 | 2026-08-21 | [8.21.doc](./Daily_Task/8.21.doc) | [Day 11](./Daily_Note/day11.md) |
+| 2026-08-22 | [8.22.doc](./Daily_Task/8.22.doc) | [Day 12](./Daily_Note/day12.md) |
 
 ## 快速入口
 
@@ -104,6 +108,8 @@ Docker 安装、镜像管理与容器化 Python/PyTorch 环境
 - [Day 10 命令与排障速查](./SearchTable.md#2026-08-20requests-调用-ai-接口异常处理与进度条)
 - [Day 11 Docker 安装、镜像与 Python 环境笔记](./Daily_Note/day11.md)
 - [Day 11 Docker 命令与排障速查](./SearchTable.md#2026-08-21docker-安装镜像与-python-环境)
+- [Day 12 Docker 生命周期与 CPU 推理容器笔记](./Daily_Note/day12.md)
+- [Day 12 Docker 生命周期、exec 与 CPU 推理速查](./SearchTable.md#2026-08-22docker-生命周期exec-与-cpu-推理容器)
 
 ## 实验脚本
 
@@ -229,6 +235,50 @@ sudo docker run --rm \
 
 `python --version` 只检查宿主机 Python；容器内版本必须通过 `docker run` 单独确认。`torch.cuda.is_available()` 返回 `False` 时，还需结合宿主机驱动、NVIDIA Container Toolkit 和 GPU 运行参数继续判断，不能直接认定 PyTorch 安装失败。
 
+### Docker 生命周期与 CPU 推理容器
+
+Day 12 在已有 Docker 环境上继续练习容器生命周期和 `exec`。本次使用已有的 `python:3.12-slim-bookworm` 镜像，不使用 GPU，也不添加 `--gpus all`。
+
+核心操作流程：
+
+```text
+确认 Docker -> 编写 infer.py -> docker run -d 启动容器
+-> docker ps 查看 Up 状态 -> docker exec 执行 Python 推理 -> 查看 JSON 输出
+```
+
+启动 CPU 容器并挂载宿主机脚本目录：
+
+```bash
+docker run -d \
+  --name python-infer-cpu \
+  --restart unless-stopped \
+  -v "$HOME/docker-infer-cpu:/app:Z" \
+  python:3.12-slim-bookworm \
+  python -c 'import time; time.sleep(10**9)'
+```
+
+查看容器运行状态：
+
+```bash
+docker ps --filter name=python-infer-cpu
+```
+
+使用 `docker exec` 直接执行推理脚本：
+
+```bash
+docker exec python-infer-cpu \
+  /usr/local/bin/python /app/infer.py \
+  --text "CPU Docker inference test"
+```
+
+预期输出：
+
+```json
+{"input": "CPU Docker inference test", "label": "neutral", "device": "cpu"}
+```
+
+Day 12 的重点是区分 `run` 与 `start`、`stop` 与 `rm`，理解 `-d`、`-v`、`-it` 参数，并确认 `docker exec` 只能对运行中的容器执行命令。`-v` 让宿主机的 `infer.py` 出现在容器的 `/app` 目录中；CentOS 开启 SELinux 时使用 `:Z` 处理挂载标签。
+
 ## 当前实验产物
 
 | 日期 | 产物 | 用途 |
@@ -241,6 +291,7 @@ sudo docker run --rm \
 | 2026-08-19 | `Report/8.19/report.py`、`run_report.sh`、`inference.json`、`report.md` | 读取 JSON 推理输出，生成可读的 Markdown 结果报表 |
 | 2026-08-20 | `Report/8.20/ai_infer.py`、`prompts.txt`、`results.jsonl` | 调用 AI 接口，显示批量进度，有限重试并逐条保存成功/失败结果 |
 | 2026-08-21 | `Daily_Note/day11.md`、`Daily_Task/8.21.doc`、`SearchTable.md` Docker 章节 | 记录 Docker 安装、镜像加速器、容器权限、Python/PyTorch 镜像验证和常见网络排障 |
+| 2026-08-22 | `Daily_Note/day12.md`、`Daily_Task/8.22.doc`、`SearchTable.md` Docker 生命周期章节 | 记录 `docker run`、`ps`、`exec`、`-v` 挂载和 CPU Python 推理容器的运行结果 |
 
 ## 后续方向
 
